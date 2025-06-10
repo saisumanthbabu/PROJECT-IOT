@@ -1,0 +1,92 @@
+#Training
+
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.tree import DecisionTreeClassifier
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
+from sklearn.ensemble import VotingClassifier
+from sklearn.metrics import accuracy_score
+
+# Load the UNSW-NB15 dataset
+from google.colab import files
+uploaded = files.upload()
+import io
+
+filename = list(uploaded.keys())[0]
+df = pd.read_csv(io.BytesIO(uploaded[filename]))
+
+# Display dataset info
+print(df.head())
+
+# Drop unnecessary columns (adjust based on dataset structure)
+df = df.select_dtypes(include=[np.number])  # Keep only numerical features
+
+# Handle missing values if any
+df.fillna(df.mean(), inplace=True)
+
+# Split data into features and target
+X = df.iloc[:, :-1]  # All columns except the last one as features
+y = df.iloc[:, -1]   # Last column as the target variable
+
+# Encode target labels if necessary
+label_encoder = LabelEncoder()
+y = label_encoder.fit_transform(y)
+
+# Split dataset into train and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Scale the data for better performance
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Initialize ML models
+models = {
+    "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
+    "AdaBoost": AdaBoostClassifier(n_estimators=100, random_state=42),
+    "XGBoost": XGBClassifier(use_label_encoder=False, eval_metric='logloss'),
+    "LightGBM": LGBMClassifier(boosting_type='gbdt', objective='binary', random_state=42),
+    "Decision Tree": DecisionTreeClassifier(random_state=42),
+    "CatBoost": CatBoostClassifier(iterations=100, depth=6, learning_rate=0.1, verbose=0)
+}
+
+# Ensemble Model (Random Forest + LightGBM)
+ensemble_model = VotingClassifier(estimators=[
+    ('rf', models["Random Forest"]),
+    ('lgbm', models["LightGBM"])
+], voting='soft')
+
+# Add ensemble model to the list
+models["Ensemble RF-LightGBM"] = ensemble_model
+
+# Train and evaluate models
+accuracy_scores = {}
+
+for name, model in models.items():
+    model.fit(X_train, y_train)  # Train the model
+    y_pred = model.predict(X_test)  # Predict on test data
+    accuracy = accuracy_score(y_test, y_pred) * 100  # Compute accuracy
+    accuracy_scores[name] = accuracy
+    print(f"{name} Accuracy: {accuracy:.2f}%")
+
+# Visualizing the results
+plt.figure(figsize=(10, 6))
+plt.bar(accuracy_scores.keys(), accuracy_scores.values(), color='royalblue')
+plt.xlabel("ML Algorithms")
+plt.ylabel("Accuracy (%)")
+plt.title("Accuracy of 7 ML Algorithms using UNSW-NB15 Dataset")
+plt.ylim(0, 100)
+plt.xticks(rotation=30, ha="right")
+
+# Show accuracy values on top of bars
+for i, (name, acc) in enumerate(accuracy_scores.items()):
+    plt.text(i, acc + 1, f"{acc:.1f}%", ha='center', fontsize=12)
+
+plt.show()
